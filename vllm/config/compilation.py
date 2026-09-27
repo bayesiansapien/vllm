@@ -987,7 +987,11 @@ class CompilationConfig:
             # use horizontal fusion, which is useful for fusing qk-norm and
             # qk-rope when query and key have different shapes.
             self.inductor_compile_config["combo_kernels"] = True
-            self.inductor_compile_config["benchmark_combo_kernel"] = True
+            # Inductor's deterministic mode rejects on-device benchmarking
+            # during compilation, so only benchmark combo kernels outside it.
+            self.inductor_compile_config[
+                "benchmark_combo_kernel"
+            ] = not self._inductor_deterministic()
 
         if self.use_inductor_graph_partition and not is_torch_equal_or_newer(
             "2.9.0.dev"
@@ -1062,6 +1066,13 @@ class CompilationConfig:
 
         if self.backend == "":
             self.backend = current_platform.get_compile_backend()
+
+    def _inductor_deterministic(self) -> bool:
+        if "deterministic" in self.inductor_compile_config:
+            return bool(self.inductor_compile_config["deterministic"])
+        from torch._inductor import config as inductor_config
+
+        return inductor_config.deterministic
 
     def init_backend(
         self,

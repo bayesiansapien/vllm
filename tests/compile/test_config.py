@@ -1363,3 +1363,29 @@ def test_inductor_asserts_user_override(monkeypatch):
     assert config.inductor_compile_config.get("size_asserts") is True
     if not _is_torch_equal_or_newer(torch.__version__, "2.12.0.dev"):
         assert config.inductor_compile_config.get("alignment_asserts") is False
+
+
+@pytest.mark.parametrize(
+    "inductor_deterministic,user_config,expected",
+    [
+        (False, {}, True),
+        (True, {}, False),
+        (False, {"deterministic": True}, False),
+        (True, {"deterministic": False}, True),
+    ],
+)
+def test_benchmark_combo_kernel_respects_inductor_deterministic(
+    monkeypatch, inductor_deterministic, user_config, expected
+):
+    """Inductor's deterministic mode raises on the on-device benchmarking that
+    benchmark_combo_kernel does during compilation (#58899)."""
+    if not _is_torch_equal_or_newer(torch.__version__, "2.9.0.dev"):
+        pytest.skip("combo kernels are only enabled on torch>=2.9")
+    from torch._inductor import config as inductor_config
+
+    monkeypatch.setattr(inductor_config, "deterministic", inductor_deterministic)
+    monkeypatch.setattr(current_platform, "is_cpu", lambda: False)
+
+    config = CompilationConfig(inductor_compile_config=dict(user_config))
+    assert config.inductor_compile_config["combo_kernels"] is True
+    assert config.inductor_compile_config["benchmark_combo_kernel"] is expected
